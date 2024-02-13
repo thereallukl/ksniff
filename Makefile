@@ -1,4 +1,5 @@
 TCPDUMP_VERSION=4.99.4
+PCAP_VERSION=1.10.4
 STATIC_TCPDUMP_NAME=static-tcpdump
 NEW_PLUGIN_SYSTEM_MINIMUM_KUBECTL_VERSION=12
 UNAME := $(shell uname)
@@ -34,7 +35,7 @@ darwin:
 	GO111MODULE=on GOOS=darwin GOARCH=amd64 go build -o kubectl-sniff-darwin cmd/kubectl-sniff.go
 	GO111MODULE=on GOOS=darwin GOARCH=arm64 go build -o kubectl-sniff-darwin-arm64 cmd/kubectl-sniff.go
 
-all: linux windows darwin
+all: linux windows darwin static-pcap static-tcpdump
 
 test:
 	GO111MODULE=on go test ./...
@@ -42,12 +43,22 @@ test:
 static-tcpdump:
 	wget http://www.tcpdump.org/release/tcpdump-${TCPDUMP_VERSION}.tar.gz
 	tar -xvf tcpdump-${TCPDUMP_VERSION}.tar.gz
-	cd tcpdump-${TCPDUMP_VERSION} && CFLAGS=-static ./configure --without-crypto && make
+	cd tcpdump-${TCPDUMP_VERSION} && CFLAGS=-static PCAP_CONFIG=./../pcap/bin/pcap-config ./configure --without-crypto && make
 	mv tcpdump-${TCPDUMP_VERSION}/tcpdump ./${STATIC_TCPDUMP_NAME}
 	rm -rf tcpdump-${TCPDUMP_VERSION} tcpdump-${TCPDUMP_VERSION}.tar.gz
 
+static-pcap:
+	wget https://www.tcpdump.org/release/libpcap-${PCAP_VERSION}.tar.gz
+	tar -xvf libpcap-${PCAP_VERSION}.tar.gz
+	cd libpcap-${PCAP_VERSION} && CFLAGS=-static ./configure --without-crypto --prefix=$(shell pwd)/pcap && make && make install
+	#mv tcpdump-${TCPDUMP_VERSION}/tcpdump ./${STATIC_TCPDUMP_NAME}
+	#rm -rf tcpdump-${TCPDUMP_VERSION} tcpdump-${TCPDUMP_VERSION}.tar.gz
+
+
 package:
 	zip ksniff.zip kubectl-sniff kubectl-sniff-windows kubectl-sniff-darwin kubectl-sniff-darwin-arm64 static-tcpdump Makefile plugin.yaml LICENSE
+
+prepare_release: all package
 
 install:
 	mkdir -p ${PLUGIN_FOLDER}
@@ -70,4 +81,6 @@ clean:
 	rm -f kubectl-sniff-darwin-arm64
 	rm -f static-tcpdump
 	rm -f ksniff.zip
-
+	rm -rf libpcap-*
+	rm -rf tcpdump-*
+	rm -r pcap/
